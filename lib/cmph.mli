@@ -10,7 +10,7 @@ module Config : sig
   ]
   type t
 
-  val create : ?algo:algo -> KeySet.t -> t
+  val create : ?algo:algo -> ?file:string -> KeySet.t -> t
 end
 
 module Hash : sig
