@@ -1,0 +1,17 @@
+opam-version: "1.2"
+name: "cmph"
+version: "1.0.0"
+maintainer: "Jack Feser <feser@csail.mit.edu>"
+authors: "Jack Feser <feser@csail.mit.edu>"
+homepage: "https://github.com/jfeser/ocaml-cmph"
+bug-reports: "https://github.com/jfeser/ocaml-cmph/issues"
+license: "MIT"
+dev-repo: "https://github.com/jfeser/ocaml-cmph.git"
+build: [
+  ["jbuilder" "build" "-p" name "-j" jobs]
+]
+depends: [
+  "jbuilder"       {build}
+  "ctypes"         {>= "0.13.1"}
+  "ctypes-foreign" {>= "0.4.0"}
+]
