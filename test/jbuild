@@ -1,5 +1,5 @@
 (jbuild_version 1)
 
-(executable
- ((name vector)
-  (libraries (cmph))))
+(executables
+ ((names (vector test))
+  (libraries (ounit cmph))))

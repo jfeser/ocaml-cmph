@@ -9,7 +9,9 @@ open Foreign
 module Bindings = struct
   type file_p = unit ptr
   let file_p = ptr void
-  let fdopen = foreign "fdopen" (int @-> string @-> returning file_p)
+  let fopen = foreign "fopen" (string @-> string @-> returning file_p)
+
+  let srand = foreign "srand" (int @-> returning void)
 
   type cmph_io_adapter_t = unit ptr
   let cmph_io_adapter_t : cmph_io_adapter_t typ = ptr void
@@ -17,6 +19,11 @@ module Bindings = struct
   let cmph_t : cmph_t typ = ptr void
   type cmph_config_t = unit ptr
   let cmph_config_t : cmph_config_t typ = ptr void
+
+  let cmph_io_nlfile_adapter =
+    foreign "cmph_io_nlfile_adapter" (file_p @-> returning cmph_io_adapter_t)
+  let cmph_io_nlfile_adapter_destroy =
+    foreign "cmph_io_nlfile_adapter_destroy" (cmph_io_adapter_t @-> returning void)
 
   let cmph_io_vector_adapter =
     foreign "cmph_io_vector_adapter" (ptr string @-> int @-> returning cmph_io_adapter_t)
@@ -40,7 +47,16 @@ module Bindings = struct
     foreign "cmph_search" (cmph_t @-> string @-> int @-> returning int)
   let cmph_destroy =
     foreign "cmph_destroy" (cmph_t @-> returning void)
+
+  let cmph_pack =
+    foreign "cmph_pack" (cmph_t @-> ocaml_bytes @-> returning void)
+  let cmph_packed_size =
+    foreign "cmph_packed_size" (cmph_t @-> returning int)
+  let cmph_search_packed =
+    foreign "cmph_search_packed" (ocaml_string @-> string @-> int @-> returning int)
 end
+
+external int_of_file_descr: Unix.file_descr -> int = "%identity"
 
 module KeySet = struct
   type t = {
@@ -85,10 +101,13 @@ module Config = struct
     | `Chd -> 8
     | `Count -> 9
 
-  external int_of_file_descr: Unix.file_descr -> int = "%identity"
-
-  let create : ?algo:algo -> ?file:string -> KeySet.t -> t =
-    fun ?(algo = `Brz) ?file keyset ->
+  let create : ?algo:algo -> ?file:string -> ?seed:int -> KeySet.t -> t =
+    fun ?(algo = `Brz) ?file ?seed keyset ->
+      let seed = match seed with
+        | Some x -> x
+        | None -> Random.State.make_self_init () |> Random.State.bits
+      in
+      Bindings.srand seed;
       let config = Bindings.cmph_config_new keyset.adapter in
       let ret = { config } in
       Gc.finalise (fun { config } -> Bindings.cmph_config_destroy config)
@@ -97,15 +116,32 @@ module Config = struct
 end
 
 module Hash = struct
-  type t = { hash : Bindings.cmph_t }
+  type t =
+    | Config of { hash : Bindings.cmph_t }
+    | Packed of string
 
-  let create : Config.t -> t = fun { config } ->
+  let of_config : Config.t -> t = fun { config } ->
     let hash = Bindings.cmph_new config in
-    let ret = { hash } in
-    Gc.finalise (fun { hash } -> Bindings.cmph_destroy hash) ret;
+    let ret = Config { hash } in
+    Gc.finalise (function
+        | Config { hash } -> Bindings.cmph_destroy hash
+        | _ -> ()) ret;
     ret
 
-  let hash : t -> string -> int = fun { hash } key ->
-    Bindings.cmph_search hash key (String.length key)
+  let of_packed : string -> t = fun pack -> Packed pack
+
+  let to_packed : t -> string = function
+    | Config { hash } ->
+      let size = Bindings.cmph_packed_size hash in
+      let buf = Bytes.create size in
+      Bindings.cmph_pack hash (ocaml_bytes_start buf);
+      Bytes.to_string buf
+    | Packed p -> p
+
+  let hash : t -> string -> int = fun t key ->
+    match t with
+    | Config { hash } -> Bindings.cmph_search hash key (String.length key)
+    | Packed pack -> Bindings.cmph_search_packed (ocaml_string_start pack) key
+                       (String.length key)
 end
 
