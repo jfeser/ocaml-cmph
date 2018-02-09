@@ -10,6 +10,8 @@ module Config : sig
   ]
   type t
 
+  val string_of_algo : algo -> string
+
   val create : ?algo:algo -> ?file:string -> ?seed:int -> KeySet.t -> t
 end
 

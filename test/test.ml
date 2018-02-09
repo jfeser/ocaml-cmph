@@ -7,7 +7,7 @@ let algos =
 let suite = "tests" >::: [
     "packed" >::: (
       List.map (fun algo ->
-          "" >:: (fun ctxt ->
+          (Config.string_of_algo algo) >:: (fun ctxt ->
               let ch = open_in "test/keys-long.txt" in
               let rec read lines =
                 try

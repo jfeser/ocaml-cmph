@@ -101,6 +101,18 @@ module Config = struct
     | `Chd -> 8
     | `Count -> 9
 
+  let string_of_algo = function
+    | `Bmz -> "Bmz"
+    | `Bmz8 -> "Bmz8"
+    | `Chm -> "Chm"
+    | `Brz -> "Brz"
+    | `Fch -> "Fch"
+    | `Bdz -> "Bdz"
+    | `Bdz_ph -> "Bdz_ph"
+    | `Chd_ph -> "Chd_ph"
+    | `Chd -> "Chd"
+    | `Count -> "Count"
+
   let create : ?algo:algo -> ?file:string -> ?seed:int -> KeySet.t -> t =
     fun ?(algo = `Brz) ?file ?seed keyset ->
       let seed = match seed with
@@ -109,6 +121,7 @@ module Config = struct
       in
       Bindings.srand seed;
       let config = Bindings.cmph_config_new keyset.adapter in
+      Bindings.cmph_config_set_algo config (algo_value algo);
       let ret = { config } in
       Gc.finalise (fun { config } -> Bindings.cmph_config_destroy config)
         ret;
