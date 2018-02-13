@@ -30,6 +30,11 @@ module Bindings = struct
   let cmph_io_vector_adapter_destroy =
     foreign "cmph_io_vector_adapter_destroy" (cmph_io_adapter_t @-> returning void)
 
+  let cmph_io_struct_vector_adapter =
+    foreign "cmph_io_struct_vector_adapter" (string @-> int @-> int @-> int @-> int @-> returning cmph_io_adapter_t)
+  let cmph_io_struct_vector_adapter_destroy =
+    foreign "cmph_io_struct_vector_adapter_destroy" (cmph_io_adapter_t @-> returning void)
+
   let cmph_config_new =
     foreign "cmph_config_new" (cmph_io_adapter_t @-> returning cmph_config_t)
   let cmph_config_set_hashfuncs =
@@ -59,24 +64,47 @@ end
 external int_of_file_descr: Unix.file_descr -> int = "%identity"
 
 module KeySet = struct
+  exception Error of [`Empty | `Null_byte_in_key | `Not_fixed_width]
+
   type t = {
-    keys : string CArray.t;
+    keys : [`Strings of string CArray.t | `FixedWidth of string];
     adapter : Bindings.cmph_io_adapter_t;
   }
 
-  let of_string_list : string list -> t = fun keys ->
-    List.iter (String.iter (fun c -> if c = '\x00' then failwith "Null byte present in key.")) keys;
+  let of_strings : string list -> t = fun keys ->
+    if keys = [] then raise (Error `Empty);
+    List.iter (String.iter (fun c ->
+        if c = '\x00' then raise (Error `Null_byte_in_key))) keys;
     let nkeys = List.length keys in
     let arr = CArray.make string nkeys in
     List.iteri (CArray.set arr) keys;
     let ret = {
-      keys = arr;
+      keys = `Strings arr;
       adapter = Bindings.cmph_io_vector_adapter (CArray.start arr) nkeys;
     } in
     Gc.finalise
       (fun { adapter } -> Bindings.cmph_io_vector_adapter_destroy adapter)
       ret;
     ret
+
+  let of_fixed_width : string list -> t = fun keys ->
+    let len = match keys with
+      | [] -> raise (Error `Empty)
+      | x::xs -> List.fold_left (fun l k ->
+          if String.length k <> l then raise (Error `Not_fixed_width) else l)
+          (String.length x) xs
+    in
+    let nkeys = List.length keys in
+    let buf = String.concat "" keys in
+    let ret = {
+      keys = `FixedWidth buf;
+      adapter = Bindings.cmph_io_struct_vector_adapter buf len 0 len nkeys;
+    } in
+    Gc.finalise
+      (fun { adapter } -> Bindings.cmph_io_struct_vector_adapter_destroy adapter)
+      ret;
+    ret
+
 end
 
 module Config = struct
