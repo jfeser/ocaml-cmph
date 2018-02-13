@@ -64,7 +64,8 @@ module KeySet = struct
     adapter : Bindings.cmph_io_adapter_t;
   }
 
-  let of_list : string list -> t = fun keys ->
+  let of_string_list : string list -> t = fun keys ->
+    List.iter (String.iter (fun c -> if c = '\x00' then failwith "Null byte present in key.")) keys;
     let nkeys = List.length keys in
     let arr = CArray.make string nkeys in
     List.iteri (CArray.set arr) keys;
