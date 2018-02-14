@@ -1,7 +1,11 @@
 (jbuild_version 1)
 
+(rule
+ ((targets (flags))
+  (action (with-stdout-to flags (run ${OCAML} ${path:flags.ml})))))
+
 (library
  ((name cmph)
   (public_name cmph)
   (libraries (ctypes ctypes.foreign))
-  (c_library_flags (:standard -Wl,--no-as-needed -lcmph))))
+  (c_library_flags (:standard (:include flags) -lcmph))))
