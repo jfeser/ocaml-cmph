@@ -2,10 +2,11 @@
 
 (rule
  ((targets (flags))
-  (action (with-stdout-to flags (run ${OCAML} ${path:flags.ml})))))
+  (action (with-stdout-to flags (run ${path:flags.ml})))))
 
 (library
  ((name cmph)
   (public_name cmph)
+  (modules cmph)
   (libraries (ctypes ctypes.foreign))
   (c_library_flags (:standard (:include flags) -lcmph))))
