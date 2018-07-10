@@ -8,5 +8,6 @@
  ((name cmph)
   (public_name cmph)
   (modules cmph)
-  (libraries (ctypes ctypes.foreign))
-  (c_library_flags (:standard (:include flags) -lcmph))))
+  (libraries (base stdio ctypes ctypes.foreign))
+  (c_library_flags (:standard (:include flags) -lcmph))
+  (preprocess (pps (ppx_sexp_conv ppx_driver.runner -no-check)))))
