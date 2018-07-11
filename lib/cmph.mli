@@ -1,3 +1,7 @@
+module Util : sig
+  val with_output : (unit -> 'a) -> ('a, exn) result * string
+end
+
 module KeySet : sig
   type t
 

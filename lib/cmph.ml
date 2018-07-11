@@ -7,6 +7,7 @@ open Base
 open Stdio
 open Ctypes
 open Foreign
+module Util = Util
 
 module Bindings = struct
   type file_p = unit ptr
@@ -107,7 +108,8 @@ end
 external int_of_file_descr : Unix.file_descr -> int = "%identity"
 
 exception
-  Error of [`Empty | `No_suitable_ctor | `Hash_new_failed | `Parameter_range]
+  Error of
+    [`Empty | `No_suitable_ctor | `Hash_new_failed of string | `Parameter_range]
   [@@deriving sexp]
 
 module KeySet = struct
@@ -285,13 +287,16 @@ module Hash = struct
 
   let of_config : Config.t -> t =
    fun {config} ->
-    let hash = Bindings.cmph_new config in
-    if Ctypes.is_null hash then raise (Error `Hash_new_failed) ;
-    let ret = Config {hash} in
-    Caml.Gc.finalise
-      (function Config {hash} -> Bindings.cmph_destroy hash | _ -> ())
-      ret ;
-    ret
+    let hash, output = Util.with_output (fun () -> Bindings.cmph_new config) in
+    match hash with
+    | Ok hash ->
+        if Ctypes.is_null hash then raise (Error (`Hash_new_failed output)) ;
+        let ret = Config {hash} in
+        Caml.Gc.finalise
+          (function Config {hash} -> Bindings.cmph_destroy hash | _ -> ())
+          ret ;
+        ret
+    | Error _ -> raise (Error (`Hash_new_failed output))
 
   let of_packed : string -> t = fun pack -> Packed pack
 

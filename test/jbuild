@@ -7,8 +7,7 @@
 (alias
  ((name runtest)
   (deps
-   ((file keys.txt)
-    (file keys-long.txt)
+   ((file keys-long.txt)
     (file keys-fw-1.buf)
     (file keys-fw.buf)))
   (action (run ./test.exe))))
