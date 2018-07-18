@@ -63,20 +63,8 @@ module Bindings = struct
     foreign "cmph_config_set_verbosity"
       (cmph_config_t @-> int @-> returning void)
 
-  let cmph_config_set_hashfuncs =
-    foreign "cmph_config_set_hashfuncs"
-      (cmph_config_t @-> ptr int @-> returning void)
-
   let cmph_config_set_algo =
     foreign "cmph_config_set_algo" (cmph_config_t @-> int @-> returning void)
-
-  let cmph_config_set_tmp_dir =
-    foreign "cmph_config_set_tmp_dir"
-      (cmph_config_t @-> string @-> returning void)
-
-  let cmph_config_set_mphf_fd =
-    foreign "cmph_config_set_mphf_fd"
-      (cmph_config_t @-> file_p @-> returning void)
 
   let cmph_config_set_b =
     foreign "cmph_config_set_b" (cmph_config_t @-> int @-> returning void)
@@ -104,8 +92,6 @@ module Bindings = struct
     foreign "cmph_search_packed"
       (ocaml_string @-> string @-> int @-> returning int)
 end
-
-external int_of_file_descr : Unix.file_descr -> int = "%identity"
 
 exception
   Error of
@@ -141,7 +127,7 @@ module KeySet = struct
       ; adapter= Bindings.cmph_io_vector_adapter (CArray.start arr) nkeys }
     in
     Caml.Gc.finalise
-      (fun {adapter} -> Bindings.cmph_io_vector_adapter_destroy adapter)
+      (fun {adapter; _} -> Bindings.cmph_io_vector_adapter_destroy adapter)
       ret ;
     ret
 
@@ -163,7 +149,8 @@ module KeySet = struct
       ; adapter= Bindings.cmph_io_struct_vector_adapter buf len 0 len nkeys }
     in
     Caml.Gc.finalise
-      (fun {adapter} -> Bindings.cmph_io_struct_vector_adapter_destroy adapter)
+      (fun {adapter; _} ->
+        Bindings.cmph_io_struct_vector_adapter_destroy adapter )
       ret ;
     ret
 
@@ -182,11 +169,11 @@ module KeySet = struct
     in
     Caml.Gc.finalise
       (function
-          | {adapter; keys= `File (fp, fn)} ->
-              Bindings.cmph_io_nlnkfile_adapter_destroy adapter ;
-              Bindings.fclose fp ;
-              Caml.Sys.remove fn
-          | _ -> assert false)
+        | {adapter; keys= `File (fp, fn); _} ->
+            Bindings.cmph_io_nlnkfile_adapter_destroy adapter ;
+            Bindings.fclose fp ;
+            Caml.Sys.remove fn
+        | _ -> assert false)
       ret ;
     ret
 
@@ -220,8 +207,6 @@ module Config = struct
   [@@deriving sexp]
 
   type t = {config: Bindings.cmph_config_t}
-
-  let hash_value = function `Jenkins -> 0 | `Count -> 1
 
   let algo_value = function
     | `Bmz -> 0

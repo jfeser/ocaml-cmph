@@ -57,7 +57,7 @@ let packed_fw_test algo seed fn =
       (kv_config, kv_packed) )
   |> check_result ctxt
 
-let rec product_3 l1 l2 l3 =
+let product_3 l1 l2 l3 =
   List.map
     (fun x1 ->
       List.map (fun x2 -> List.map (fun x3 -> (x1, x2, x3)) l3) l2

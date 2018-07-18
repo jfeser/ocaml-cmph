@@ -1,3 +1,8 @@
+exception
+  Error of
+    [`Empty | `No_suitable_ctor | `Hash_new_failed of string | `Parameter_range]
+  [@@deriving sexp]
+
 module Util : sig
   val with_output : (unit -> 'a) -> ('a, exn) result * string
 end
