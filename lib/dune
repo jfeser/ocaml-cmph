@@ -1,0 +1,15 @@
+(rule
+ (targets flags)
+ (action (with-stdout-to flags (run %{dep:flags.ml}))))
+
+(library
+ (name cmph)
+ (public_name cmph)
+ (modules cmph util)
+ (libraries base stdio ctypes ctypes.foreign)
+ (c_library_flags (:standard (:include flags) -lcmph))
+ (preprocess (pps ppx_sexp_conv)))
+
+; Local Variables:
+; mode: tuareg-dune
+; End:
