@@ -8,10 +8,10 @@ bug-reports: "https://github.com/jfeser/ocaml-cmph/issues"
 license: "MIT"
 dev-repo: "https://github.com/jfeser/ocaml-cmph.git"
 build: [
-  ["jbuilder" "build" "-p" name "-j" jobs]
+  ["dune" "build" "-p" name "-j" jobs]
 ]
 depends: [
-  "jbuilder"       {build}
-  "ctypes"         {>= "0.13.1"}
-  "ctypes-foreign" {>= "0.4.0"}
+  "dune"           {build & >= "1.1"}
+  "ctypes"         {>= "0.14" & < "0.15"}
+  "ctypes-foreign" {>= "0.4" & < "0.5"}
 ]
