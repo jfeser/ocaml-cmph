@@ -1,6 +1,12 @@
 exception
   Error of
-    [`Empty | `No_suitable_ctor | `Hash_new_failed of string | `Parameter_range]
+    [ `Empty
+    | `No_suitable_ctor
+    | `Hash_new_failed of string
+    | `Parameter_range
+    | `Contains_null_byte of string
+    | `Contains_newline of string
+    | `Not_fixed_width of string * int ]
   [@@deriving sexp]
 
 module Util : sig

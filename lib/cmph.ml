@@ -69,6 +69,10 @@ module Bindings = struct
   let cmph_config_set_b =
     foreign "cmph_config_set_b" (cmph_config_t @-> int @-> returning void)
 
+  let cmph_config_set_graphsize =
+    foreign "cmph_config_set_graphsize"
+      (cmph_config_t @-> double @-> returning void)
+
   let cmph_config_set_keys_per_bin =
     foreign "cmph_config_set_keys_per_bin"
       (cmph_config_t @-> int @-> returning void)
@@ -95,7 +99,13 @@ end
 
 exception
   Error of
-    [`Empty | `No_suitable_ctor | `Hash_new_failed of string | `Parameter_range]
+    [ `Empty
+    | `No_suitable_ctor
+    | `Hash_new_failed of string
+    | `Parameter_range
+    | `Contains_null_byte of string
+    | `Contains_newline of string
+    | `Not_fixed_width of string * int ]
   [@@deriving sexp]
 
 module KeySet = struct
@@ -116,10 +126,20 @@ module KeySet = struct
   let contains keys char =
     List.exists ~f:(fun k -> String.contains k char) keys
 
-  let of_cstrings : string list -> t =
-   fun keys ->
+  let uniq keys =
+    List.sort keys ~compare:[%compare: string]
+    |> List.remove_consecutive_duplicates ~equal:[%compare.equal: string]
+
+  let of_cstrings keys =
+    if List.is_empty keys then raise (Error `Empty) ;
+    (* Check invariants. *)
+    ( match List.find keys ~f:(fun k -> String.contains k '\x00') with
+    | Some k -> raise (Error (`Contains_null_byte k))
+    | None -> () ) ;
+    let keys = uniq keys in
     let nkeys = List.length keys in
     let arr = CArray.make string nkeys in
+    let keys = List.map ~f:(fun k -> k ^ String.of_char '\x00') keys in
     List.iteri ~f:(CArray.set arr) keys ;
     let ret =
       { length= List.length keys
@@ -131,16 +151,19 @@ module KeySet = struct
       ret ;
     ret
 
-  let of_fixed_width : string list -> t =
-   fun keys ->
+  let of_fixed_width keys =
     let len =
       match keys with
       | [] -> raise (Error `Empty)
       | x :: xs ->
           List.fold_left
-            ~f:(fun l k -> if String.length k <> l then assert false else l)
+            ~f:(fun l k ->
+              if String.length k <> l then
+                raise (Error (`Not_fixed_width (k, l)))
+              else l )
             ~init:(String.length x) xs
     in
+    let keys = uniq keys in
     let nkeys = List.length keys in
     let buf = String.concat ~sep:"" keys in
     let ret =
@@ -154,10 +177,16 @@ module KeySet = struct
       ret ;
     ret
 
-  let of_nlstrings : string list -> t =
-   fun keys ->
+  let of_nlstrings keys =
+    if List.is_empty keys then raise (Error `Empty) ;
+    (* Check invariants. *)
+    ( match List.find keys ~f:(fun k -> String.contains k '\n') with
+    | Some k -> raise (Error (`Contains_newline k))
+    | None -> () ) ;
+    let keys = uniq keys in
     let nkeys = List.length keys in
     let fn = Caml.Filename.temp_file "keys" "txt" in
+    print_endline fn ;
     let ch = Out_channel.create fn in
     List.iter ~f:(fun k -> Out_channel.output_string ch (k ^ "\n")) keys ;
     Out_channel.close ch ;
@@ -177,15 +206,13 @@ module KeySet = struct
       ret ;
     ret
 
-  let create : string list -> t =
-   fun keys ->
+  let create keys =
     (* Pick a keyset creation method. *)
     let ctor =
       if is_fixed_width keys then of_fixed_width
       else if not (contains keys '\x00') then of_cstrings
-      else
-        (* if not (contains keys '\n') then of_nlstrings else *)
-        raise (Error `No_suitable_ctor)
+      else if not (contains keys '\n') then of_nlstrings
+      else raise (Error `No_suitable_ctor)
     in
     ctor keys
 end
@@ -246,7 +273,7 @@ module Config = struct
     | _ -> ()
 
   let create : ?verbose:bool -> ?algo:algo -> ?seed:int -> KeySet.t -> t =
-   fun ?(verbose= false) ?(algo= default_chd) ?seed keyset ->
+   fun ?(verbose = false) ?(algo = default_chd) ?seed keyset ->
     valid_algo algo keyset ;
     let seed =
       match seed with
@@ -255,6 +282,7 @@ module Config = struct
     in
     Bindings.srand seed ;
     let config = Bindings.cmph_config_new keyset.adapter in
+    Bindings.cmph_config_set_graphsize config 0.99 ;
     Bindings.cmph_config_set_algo config (algo_value algo) ;
     Bindings.cmph_config_set_verbosity config (if verbose then 1 else 0) ;
     ( match algo with
