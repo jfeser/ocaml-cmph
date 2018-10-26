@@ -2,6 +2,8 @@ open OUnit2
 open Cmph
 open Util
 
+let seeds = [0; 1; 2; 3; 4; 5]
+
 let algos =
   Config.[`Bmz; `Bmz8; default_chd; default_chd_ph; `Fch; `Bdz; `Bdz_ph]
 
@@ -9,6 +11,8 @@ let check_result ctxt out =
   let ret, cmph_output = out in
   match ret with
   | Ok (kv_config, kv_packed) -> assert_equal ~ctxt kv_config kv_packed
+  | Error (Cmph.Error (`Hash_new_failed msg)) ->
+      logf ctxt `Warning "Cmph internal error: %s" msg
   | Error e ->
       let msg = cmph_output ^ "\n\n" ^ Printexc.to_string e in
       assert_failure msg
@@ -67,14 +71,23 @@ let product_3 l1 l2 l3 =
 
 let suite =
   "tests"
-  >::: [ "packed-strings"
-         >::: ( product_3 algos [0; 1; 2; 3; 4; 5] ["keys-long.txt"]
-              |> List.map (fun (algo, seed, fn) ->
-                     packed_strings_test algo seed fn ) )
-       ; "packed-fixedwidth"
-         >::: ( product_3 algos [0; 1; 2; 3; 4; 5]
-                  ["keys-fw.buf"; "keys-fw-1.buf"]
-              |> List.map (fun (algo, seed, fn) -> packed_fw_test algo seed fn)
-              ) ]
+  >::: [ ( "packed-strings"
+         >:::
+         (* Disable Bmz8 algorithm because it only works for key sets with < 256
+            keys. *)
+         let algos =
+           Config.[`Bmz; default_chd; default_chd_ph; `Fch; `Bdz; `Bdz_ph]
+         in
+         product_3 algos seeds ["keys-long.txt"]
+         |> List.map (fun (algo, seed, fn) -> packed_strings_test algo seed fn)
+         )
+       ; ( "packed-fixedwidth"
+         >:::
+         let algos =
+           Config.
+             [`Bmz; `Bmz8; default_chd; default_chd_ph; `Fch; `Bdz; `Bdz_ph]
+         in
+         product_3 algos seeds ["keys-fw.buf"; "keys-fw-1.buf"]
+         |> List.map (fun (algo, seed, fn) -> packed_fw_test algo seed fn) ) ]
 
 let () = run_test_tt_main suite
