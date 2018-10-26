@@ -1,6 +1,8 @@
 # ocaml-cmph
 Ocaml bindings for C Minimal Perfect Hashing Library ([CMPH](http://cmph.sourceforge.net/))
 
+[Online documentation](https://jfeser.github.io/ocaml-cmph/cmph/index.html)
+
 # Usage
 
 ```ocaml
