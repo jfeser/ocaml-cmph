@@ -5,6 +5,7 @@ maintainer: "Jack Feser <feser@csail.mit.edu>"
 authors: "Jack Feser <feser@csail.mit.edu>"
 homepage: "https://github.com/jfeser/ocaml-cmph"
 bug-reports: "https://github.com/jfeser/ocaml-cmph/issues"
+doc: "https://jfeser.github.io/ocaml-cmph/"
 license: "MIT"
 dev-repo: "https://github.com/jfeser/ocaml-cmph.git"
 build: [
@@ -12,6 +13,7 @@ build: [
 ]
 depends: [
   "dune"           {build & >= "1.1"}
+  "base"           {>= "v0.11" & < "v0.12"}
   "ctypes"         {>= "0.14" & < "0.15"}
   "ctypes-foreign" {>= "0.4" & < "0.5"}
 ]
