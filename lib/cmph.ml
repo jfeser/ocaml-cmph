@@ -282,7 +282,7 @@ module Config = struct
     in
     Bindings.srand seed ;
     let config = Bindings.cmph_config_new keyset.adapter in
-    Bindings.cmph_config_set_graphsize config 0.99 ;
+    Bindings.cmph_config_set_graphsize config 0.90 ;
     Bindings.cmph_config_set_algo config (algo_value algo) ;
     Bindings.cmph_config_set_verbosity config (if verbose then 1 else 0) ;
     ( match algo with
