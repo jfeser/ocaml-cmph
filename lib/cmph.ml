@@ -42,7 +42,7 @@ module Bindings = struct
 
   let cmph_io_vector_adapter =
     foreign "cmph_io_vector_adapter"
-      (ptr string @-> int @-> returning cmph_io_adapter_t)
+      (ptr (ptr char) @-> int @-> returning cmph_io_adapter_t)
 
   let cmph_io_vector_adapter_destroy =
     foreign "cmph_io_vector_adapter_destroy"
@@ -109,10 +109,13 @@ exception
   [@@deriving sexp]
 
 module KeySet = struct
+  open Bigarray
+
   type t =
     { length: int
     ; keys:
-        [ `Strings of string CArray.t
+        [ `Strings of (char, int8_unsigned_elt, c_layout) Array1.t list
+                      * char ptr CArray.t
         | `FixedWidth of string
         | `File of Bindings.file_p * string ]
     ; adapter: Bindings.cmph_io_adapter_t }
@@ -136,16 +139,21 @@ module KeySet = struct
     ( match List.find keys ~f:(fun k -> String.contains k '\x00') with
     | Some k -> raise (Error (`Contains_null_byte k))
     | None -> () ) ;
-    let keys = uniq keys in
-    let nkeys = List.length keys in
-    let arr = CArray.make string nkeys in
-    let keys = List.map ~f:(fun k -> k ^ String.of_char '\x00') keys in
-    List.iteri ~f:(CArray.set arr) keys ;
-    let ret =
-      { length= List.length keys
-      ; keys= `Strings arr
-      ; adapter= Bindings.cmph_io_vector_adapter (CArray.start arr) nkeys }
+    let keys =
+      uniq keys
+      |> List.map ~f:(fun k ->
+             let k = k ^ String.of_char '\x00' in
+             Array1.of_array char C_layout (String.to_array k) )
     in
+    let key_ptrs =
+      List.map keys ~f:(bigarray_start array1)
+      |> CArray.of_list Ctypes.(ptr char)
+    in
+    let nkeys = List.length keys in
+    let adapter =
+      Bindings.cmph_io_vector_adapter (CArray.start key_ptrs) nkeys
+    in
+    let ret = {length= nkeys; keys= `Strings (keys, key_ptrs); adapter} in
     Caml.Gc.finalise
       (fun {adapter; _} -> Bindings.cmph_io_vector_adapter_destroy adapter)
       ret ;
@@ -211,7 +219,7 @@ module KeySet = struct
     let ctor =
       if is_fixed_width keys then of_fixed_width
       else if not (contains keys '\x00') then of_cstrings
-      else if not (contains keys '\n') then of_nlstrings
+        (* else if not (contains keys '\n') then of_nlstrings *)
       else raise (Error `No_suitable_ctor)
     in
     ctor keys
@@ -233,7 +241,7 @@ module Config = struct
     | `Chd of chd_config ]
   [@@deriving sexp]
 
-  type t = {config: Bindings.cmph_config_t}
+  type t = {config: Bindings.cmph_config_t; keyset: KeySet.t}
 
   let algo_value = function
     | `Bmz -> 0
@@ -290,23 +298,29 @@ module Config = struct
         Bindings.cmph_config_set_b config c.keys_per_bucket ;
         Bindings.cmph_config_set_keys_per_bin config c.keys_per_bin
     | _ -> () ) ;
-    let ret = {config} in
-    Caml.Gc.finalise (fun {config} -> Bindings.cmph_config_destroy config) ret ;
+    let ret = {config; keyset} in
+    Caml.Gc.finalise
+      (fun {config; _} -> Bindings.cmph_config_destroy config)
+      ret ;
     ret
 end
 
 module Hash = struct
-  type t = Config of {hash: Bindings.cmph_t} | Packed of string
+  type t =
+    | Config of {hash: Bindings.cmph_t; config: Config.t}
+    | Packed of string
 
   let of_config : Config.t -> t =
-   fun {config} ->
-    let hash, output = Util.with_output (fun () -> Bindings.cmph_new config) in
+   fun ({config= cconfig; _} as config) ->
+    let hash, output =
+      Util.with_output (fun () -> Bindings.cmph_new cconfig)
+    in
     match hash with
     | Ok hash ->
         if Ctypes.is_null hash then raise (Error (`Hash_new_failed output)) ;
-        let ret = Config {hash} in
+        let ret = Config {hash; config} in
         Caml.Gc.finalise
-          (function Config {hash} -> Bindings.cmph_destroy hash | _ -> ())
+          (function Config {hash; _} -> Bindings.cmph_destroy hash | _ -> ())
           ret ;
         ret
     | Error _ -> raise (Error (`Hash_new_failed output))
@@ -314,7 +328,7 @@ module Hash = struct
   let of_packed : string -> t = fun pack -> Packed pack
 
   let to_packed : t -> string = function
-    | Config {hash} ->
+    | Config {hash; _} ->
         let size = Bindings.cmph_packed_size hash in
         let buf = Bytes.create size in
         Bindings.cmph_pack hash (ocaml_bytes_start buf) ;
@@ -324,7 +338,7 @@ module Hash = struct
   let hash : t -> string -> int =
    fun t key ->
     match t with
-    | Config {hash} -> Bindings.cmph_search hash key (String.length key)
+    | Config {hash; _} -> Bindings.cmph_search hash key (String.length key)
     | Packed pack ->
         Bindings.cmph_search_packed (ocaml_string_start pack) key
           (String.length key)

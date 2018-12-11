@@ -1,7 +1,9 @@
+open Base
+
 let with_output thunk =
   let old_stdout = Unix.(dup stdout) in
   let old_stderr = Unix.(dup stderr) in
-  let tmp_fn = Filename.temp_file "output" "log" in
+  let tmp_fn = Caml.Filename.temp_file "output" "log" in
   let tmp_fd = Unix.(openfile tmp_fn [O_RDWR; O_CREAT; O_KEEPEXEC] 0o600) in
   Unix.(dup2 tmp_fd stdout) ;
   Unix.(dup2 tmp_fd stderr) ;
