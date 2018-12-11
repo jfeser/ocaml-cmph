@@ -1,6 +1,6 @@
 opam-version: "1.2"
 name: "cmph"
-version: "0.1.0"
+version: "0.1.1"
 maintainer: "Jack Feser <feser@csail.mit.edu>"
 authors: "Jack Feser <feser@csail.mit.edu>"
 homepage: "https://github.com/jfeser/ocaml-cmph"
