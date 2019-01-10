@@ -1,0 +1,31 @@
+opam-version: "2.0"
+name: "cmph"
+version: "0.1.1"
+synopsis: "OCaml wrapper for the C Minimal Perfect Hashing library"
+description: """
+ocaml-cmph is a wrapper library for the C Minimal Perfect Hashing (CMPH)
+library. CMPH contains algorithms for generating perfect hashes. ocaml-cmph
+exposes a high level interface to these hash generators."""
+maintainer: "Jack Feser <feser@csail.mit.edu>"
+authors: "Jack Feser <feser@csail.mit.edu>"
+license: "MIT"
+homepage: "https://github.com/jfeser/ocaml-cmph"
+doc: "https://jfeser.github.io/ocaml-cmph/"
+bug-reports: "https://github.com/jfeser/ocaml-cmph/issues"
+depends: [
+  "ocaml"
+  "dune" {build & >= "1.1"}
+  "ounit" {with-test & >= "2.0" & < "2.1"}
+  "ctypes" {>= "0.14" & < "0.15"}
+  "ctypes-foreign" {>= "0.4" & < "0.5"}
+  "base" {>= "v0.11" & < "v0.12"}
+  "stdio" {>= "v0.11" & < "v0.12"}
+  "ppx_sexp_conv" {>= "v0.11" & < "v0.12"}
+]
+build: ["dune" "build" "-p" name "-j" jobs]
+dev-repo: "git+https://github.com/jfeser/ocaml-cmph.git"
+url {
+  src:
+    "https://github.com/jfeser/ocaml-cmph/releases/download/0.1.1-1-g59d72ee/cmph-0.1.1-1-g59d72ee.tbz"
+  checksum: "md5=b74fd106b5444c82e263899109f9a6c9"
+}
