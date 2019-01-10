@@ -20,11 +20,3 @@ depends: [
   "stdio"          {>= "v0.11" & < "v0.12"}
   "ppx_sexp_conv"  {>= "v0.11" & < "v0.12"}
 ]
-
-synopsis: "OCaml wrapper for the C Minimal Perfect Hashing library"
-description: """
-`ocaml-cmph` is a wrapper library for the [C Minimal Perfect
-Hashing](http://cmph.sourceforge.net/) library. CMPH contains algorithms for
-generating perfect hashes. `ocaml-cmph` exposes a high level interface to these
-hash generators.
-"""
