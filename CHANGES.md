@@ -1,3 +1,7 @@
+## 0.1.2 (2019-02-12)
+
+Update to dune 1.7 and clean up dependencies.
+
 ## 0.1.1 (2018-12-11)
 
 Fix bug where C memory was released prematurely.

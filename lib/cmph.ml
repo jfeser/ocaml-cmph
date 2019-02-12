@@ -3,8 +3,7 @@
 (* 3. Generate the hash function. *)
 (* 4. Export the hash function by dumping to a file or outputting as a buffer. *)
 
-open Base
-open Stdio
+open Core
 open Ctypes
 open Foreign
 module Util = Util

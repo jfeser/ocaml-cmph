@@ -1,5 +1,5 @@
 (executables
- (names vector test)
+ (names test)
  (libraries oUnit cmph))
 
 (alias

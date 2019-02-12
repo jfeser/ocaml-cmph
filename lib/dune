@@ -6,7 +6,7 @@
  (name cmph)
  (public_name cmph)
  (modules cmph util)
- (libraries base stdio ctypes ctypes.foreign)
+ (libraries core ctypes ctypes.foreign)
  (c_library_flags (:standard (:include flags) -lcmph))
  (preprocess (pps ppx_sexp_conv ppx_compare)))
 
