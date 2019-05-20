@@ -9,19 +9,29 @@ open Foreign
 module Util = Util
 
 module Bindings = struct
-  type file_p = unit ptr
-
-  let file_p = ptr void
-
-  let fopen = foreign "fopen" (string @-> string @-> returning file_p)
-
-  let fclose = foreign "fclose" (file_p @-> returning void)
-
   let srand = foreign "srand" (int @-> returning void)
 
-  type cmph_io_adapter_t = unit ptr
+  type cmph_io_adapter_t
 
-  let cmph_io_adapter_t : cmph_io_adapter_t typ = ptr void
+  let cmph_io_adapter_t : cmph_io_adapter_t structure typ =
+    structure "cmph_io_adapter_t"
+
+  let _data = field cmph_io_adapter_t "data" (ptr void)
+
+  let nkeys = field cmph_io_adapter_t "nkeys" uint32_t
+
+  let read =
+    field cmph_io_adapter_t "read"
+      (funptr (ptr void @-> ptr (ptr char) @-> ptr uint32_t @-> returning int))
+
+  let dispose =
+    field cmph_io_adapter_t "dispose"
+      (funptr (ptr void @-> ptr char @-> uint32_t @-> returning void))
+
+  let rewind =
+    field cmph_io_adapter_t "rewind" (funptr (ptr void @-> returning void))
+
+  let () = seal cmph_io_adapter_t
 
   type cmph_t = unit ptr
 
@@ -31,36 +41,11 @@ module Bindings = struct
 
   let cmph_config_t : cmph_config_t typ = ptr void
 
-  let cmph_io_nlnkfile_adapter =
-    foreign "cmph_io_nlnkfile_adapter"
-      (file_p @-> int @-> returning cmph_io_adapter_t)
-
-  let cmph_io_nlnkfile_adapter_destroy =
-    foreign "cmph_io_nlnkfile_adapter_destroy"
-      (cmph_io_adapter_t @-> returning void)
-
-  let cmph_io_vector_adapter =
-    foreign "cmph_io_vector_adapter"
-      (ptr (ptr char) @-> int @-> returning cmph_io_adapter_t)
-
-  let cmph_io_vector_adapter_destroy =
-    foreign "cmph_io_vector_adapter_destroy"
-      (cmph_io_adapter_t @-> returning void)
-
-  let cmph_io_struct_vector_adapter =
-    foreign "cmph_io_struct_vector_adapter"
-      (string @-> int @-> int @-> int @-> int @-> returning cmph_io_adapter_t)
-
-  let cmph_io_struct_vector_adapter_destroy =
-    foreign "cmph_io_struct_vector_adapter_destroy"
-      (cmph_io_adapter_t @-> returning void)
-
   let cmph_config_new =
-    foreign "cmph_config_new" (cmph_io_adapter_t @-> returning cmph_config_t)
+    foreign "cmph_config_new" (ptr cmph_io_adapter_t @-> returning cmph_config_t)
 
   let cmph_config_set_verbosity =
-    foreign "cmph_config_set_verbosity"
-      (cmph_config_t @-> int @-> returning void)
+    foreign "cmph_config_set_verbosity" (cmph_config_t @-> int @-> returning void)
 
   let cmph_config_set_algo =
     foreign "cmph_config_set_algo" (cmph_config_t @-> int @-> returning void)
@@ -69,12 +54,10 @@ module Bindings = struct
     foreign "cmph_config_set_b" (cmph_config_t @-> int @-> returning void)
 
   let cmph_config_set_graphsize =
-    foreign "cmph_config_set_graphsize"
-      (cmph_config_t @-> double @-> returning void)
+    foreign "cmph_config_set_graphsize" (cmph_config_t @-> double @-> returning void)
 
   let cmph_config_set_keys_per_bin =
-    foreign "cmph_config_set_keys_per_bin"
-      (cmph_config_t @-> int @-> returning void)
+    foreign "cmph_config_set_keys_per_bin" (cmph_config_t @-> int @-> returning void)
 
   let cmph_config_destroy =
     foreign "cmph_config_destroy" (cmph_config_t @-> returning void)
@@ -86,14 +69,12 @@ module Bindings = struct
 
   let cmph_destroy = foreign "cmph_destroy" (cmph_t @-> returning void)
 
-  let cmph_pack =
-    foreign "cmph_pack" (cmph_t @-> ocaml_bytes @-> returning void)
+  let cmph_pack = foreign "cmph_pack" (cmph_t @-> ocaml_bytes @-> returning void)
 
   let cmph_packed_size = foreign "cmph_packed_size" (cmph_t @-> returning int)
 
   let cmph_search_packed =
-    foreign "cmph_search_packed"
-      (ocaml_string @-> string @-> int @-> returning int)
+    foreign "cmph_search_packed" (ocaml_string @-> string @-> int @-> returning int)
 end
 
 exception
@@ -108,120 +89,46 @@ exception
   [@@deriving sexp]
 
 module KeySet = struct
-  open Bigarray
-
   type t =
     { length: int
-    ; keys:
-        [ `Strings of (char, int8_unsigned_elt, c_layout) Array1.t list
-                      * char ptr CArray.t
-        | `FixedWidth of string
-        | `File of Bindings.file_p * string ]
-    ; adapter: Bindings.cmph_io_adapter_t }
-
-  let is_fixed_width = function
-    | [] -> raise (Error `Empty)
-    | x :: xs ->
-        let x_len = String.length x in
-        List.for_all ~f:(fun x' -> String.length x' = x_len) xs
-
-  let contains keys char =
-    List.exists ~f:(fun k -> String.contains k char) keys
+    ; read: unit ptr -> char ptr ptr -> Unsigned.uint32 ptr -> int
+    ; dispose: unit ptr -> char ptr -> Unsigned.uint32 -> unit
+    ; rewind: unit ptr -> unit
+    ; adapter: (Bindings.cmph_io_adapter_t, [`Struct]) structured ptr }
 
   let uniq keys =
     List.sort keys ~compare:[%compare: string]
     |> List.remove_consecutive_duplicates ~equal:[%compare.equal: string]
 
-  let of_cstrings keys =
+  let create keys =
+    let open Bigarray in
     if List.is_empty keys then raise (Error `Empty) ;
-    (* Check invariants. *)
-    ( match List.find keys ~f:(fun k -> String.contains k '\x00') with
-    | Some k -> raise (Error (`Contains_null_byte k))
-    | None -> () ) ;
     let keys =
       uniq keys
-      |> List.map ~f:(fun k ->
-             let k = k ^ String.of_char '\x00' in
-             Array1.of_array char C_layout (String.to_array k) )
+      |> List.map ~f:(fun k -> Array1.of_array char C_layout (String.to_array k))
     in
     let key_ptrs =
-      List.map keys ~f:(bigarray_start array1)
-      |> CArray.of_list Ctypes.(ptr char)
+      List.map keys ~f:(bigarray_start array1) |> CArray.of_list Ctypes.(ptr char)
     in
-    let nkeys = List.length keys in
-    let adapter =
-      Bindings.cmph_io_vector_adapter (CArray.start key_ptrs) nkeys
+    let keys = Array.of_list keys in
+    let key_idx = ref 0 in
+    let nkeys = Unsigned.UInt32.of_int (Array.length keys) in
+    let read _ key_ptr key_len =
+      (let module Array = CArray in
+      key_ptr <-@ key_ptrs.(!key_idx)) ;
+      let len = Array1.dim keys.(!key_idx) in
+      key_len <-@ Unsigned.UInt32.of_int len ;
+      incr key_idx ;
+      len
     in
-    let ret = {length= nkeys; keys= `Strings (keys, key_ptrs); adapter} in
-    Caml.Gc.finalise
-      (fun {adapter; _} -> Bindings.cmph_io_vector_adapter_destroy adapter)
-      ret ;
-    ret
-
-  let of_fixed_width keys =
-    let len =
-      match keys with
-      | [] -> raise (Error `Empty)
-      | x :: xs ->
-          List.fold_left
-            ~f:(fun l k ->
-              if String.length k <> l then
-                raise (Error (`Not_fixed_width (k, l)))
-              else l )
-            ~init:(String.length x) xs
-    in
-    let keys = uniq keys in
-    let nkeys = List.length keys in
-    let buf = String.concat ~sep:"" keys in
-    let ret =
-      { length= List.length keys
-      ; keys= `FixedWidth buf
-      ; adapter= Bindings.cmph_io_struct_vector_adapter buf len 0 len nkeys }
-    in
-    Caml.Gc.finalise
-      (fun {adapter; _} ->
-        Bindings.cmph_io_struct_vector_adapter_destroy adapter )
-      ret ;
-    ret
-
-  let of_nlstrings keys =
-    if List.is_empty keys then raise (Error `Empty) ;
-    (* Check invariants. *)
-    ( match List.find keys ~f:(fun k -> String.contains k '\n') with
-    | Some k -> raise (Error (`Contains_newline k))
-    | None -> () ) ;
-    let keys = uniq keys in
-    let nkeys = List.length keys in
-    let fn = Caml.Filename.temp_file "keys" "txt" in
-    print_endline fn ;
-    let ch = Out_channel.create fn in
-    List.iter ~f:(fun k -> Out_channel.output_string ch (k ^ "\n")) keys ;
-    Out_channel.close ch ;
-    let fp = Bindings.fopen fn "r" in
-    let ret =
-      { length= List.length keys
-      ; keys= `File (fp, fn)
-      ; adapter= Bindings.(cmph_io_nlnkfile_adapter fp nkeys) }
-    in
-    Caml.Gc.finalise
-      (function
-        | {adapter; keys= `File (fp, fn); _} ->
-            Bindings.cmph_io_nlnkfile_adapter_destroy adapter ;
-            Bindings.fclose fp ;
-            Caml.Sys.remove fn
-        | _ -> assert false)
-      ret ;
-    ret
-
-  let create keys =
-    (* Pick a keyset creation method. *)
-    let ctor =
-      if is_fixed_width keys then of_fixed_width
-      else if not (contains keys '\x00') then of_cstrings
-        (* else if not (contains keys '\n') then of_nlstrings *)
-      else raise (Error `No_suitable_ctor)
-    in
-    ctor keys
+    let dispose _ _ _ = () in
+    let rewind _ = key_idx := 0 in
+    let adapter = make Bindings.cmph_io_adapter_t in
+    setf adapter Bindings.nkeys nkeys ;
+    setf adapter Bindings.read read ;
+    setf adapter Bindings.dispose dispose ;
+    setf adapter Bindings.rewind rewind ;
+    {length= Array.length keys; read; dispose; rewind; adapter= addr adapter}
 end
 
 module Config = struct
@@ -275,8 +182,7 @@ module Config = struct
         then raise (Error `Parameter_range)
         else ()
     | `Bmz8 ->
-        if keyset.KeySet.length > 256 then raise (Error `Parameter_range)
-        else ()
+        if keyset.KeySet.length > 256 then raise (Error `Parameter_range) else ()
     | _ -> ()
 
   let create : ?verbose:bool -> ?algo:algo -> ?seed:int -> KeySet.t -> t =
@@ -298,22 +204,16 @@ module Config = struct
         Bindings.cmph_config_set_keys_per_bin config c.keys_per_bin
     | _ -> () ) ;
     let ret = {config; keyset} in
-    Caml.Gc.finalise
-      (fun {config; _} -> Bindings.cmph_config_destroy config)
-      ret ;
+    Caml.Gc.finalise (fun {config; _} -> Bindings.cmph_config_destroy config) ret ;
     ret
 end
 
 module Hash = struct
-  type t =
-    | Config of {hash: Bindings.cmph_t; config: Config.t}
-    | Packed of string
+  type t = Config of {hash: Bindings.cmph_t; config: Config.t} | Packed of string
 
   let of_config : Config.t -> t =
    fun ({config= cconfig; _} as config) ->
-    let hash, output =
-      Util.with_output (fun () -> Bindings.cmph_new cconfig)
-    in
+    let hash, output = Util.with_output (fun () -> Bindings.cmph_new cconfig) in
     match hash with
     | Ok hash ->
         if Ctypes.is_null hash then raise (Error (`Hash_new_failed output)) ;

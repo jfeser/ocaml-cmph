@@ -5,12 +5,11 @@ open Util
 
 let seeds = [0; 1; 2; 3; 4; 5]
 
-let algos =
-  Config.[`Bmz; `Bmz8; default_chd; default_chd_ph; `Fch; `Bdz; `Bdz_ph]
+let algos = Config.[`Bmz; `Bmz8; default_chd; default_chd_ph; `Fch; `Bdz; `Bdz_ph]
 
 let of_int ~byte_width x =
-  if byte_width > 0 && Float.(of_int x >= 2.0 ** (of_int byte_width * 8.0))
-  then failwith "Integer too large." ;
+  if byte_width > 0 && Float.(of_int x >= 2.0 ** (of_int byte_width * 8.0)) then
+    failwith "Integer too large." ;
   let buf = Bytes.make byte_width '\x00' in
   for i = 0 to byte_width - 1 do
     Bytes.set buf i ((x lsr (i * 8)) land 0xFF |> Caml.char_of_int)
@@ -62,7 +61,7 @@ let packed_strings_test algo seed fn =
   in
   let keys = read [] in
   with_output (fun () ->
-      let keyset = KeySet.of_cstrings keys in
+      let keyset = KeySet.create keys in
       let config = Config.create ~seed:0 ~verbose:true ~algo keyset in
       let chash = Hash.of_config config in
       let kv_config = List.map ~f:(Hash.hash chash) keys in
@@ -84,7 +83,7 @@ let packed_fw_test algo seed fn =
   in
   let keys = read [] in
   with_output (fun () ->
-      let keyset = KeySet.of_fixed_width keys in
+      let keyset = KeySet.create keys in
       let config = Config.create ~seed:0 ~verbose:true ~algo keyset in
       let chash = Hash.of_config config in
       let kv_config = List.map ~f:(Hash.hash chash) keys in
@@ -113,16 +112,14 @@ let suite =
            Config.[`Bmz; default_chd; default_chd_ph; `Fch; `Bdz; `Bdz_ph]
          in
          product_3 algos seeds ["keys-long.txt"]
-         |> List.map ~f:(fun (algo, seed, fn) ->
-                packed_strings_test algo seed fn ) )
+         |> List.map ~f:(fun (algo, seed, fn) -> packed_strings_test algo seed fn)
+         )
        ; ( "packed-fixedwidth"
          >:::
          let algos =
-           Config.
-             [`Bmz; `Bmz8; default_chd; default_chd_ph; `Fch; `Bdz; `Bdz_ph]
+           Config.[`Bmz; `Bmz8; default_chd; default_chd_ph; `Fch; `Bdz; `Bdz_ph]
          in
          product_3 algos seeds ["keys-fw.buf"; "keys-fw-1.buf"]
-         |> List.map ~f:(fun (algo, seed, fn) -> packed_fw_test algo seed fn)
-         ) ]
+         |> List.map ~f:(fun (algo, seed, fn) -> packed_fw_test algo seed fn) ) ]
 
 let () = run_test_tt_main suite
