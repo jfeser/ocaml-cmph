@@ -77,15 +77,7 @@ module Bindings = struct
     foreign "cmph_search_packed" (ocaml_string @-> string @-> int @-> returning int)
 end
 
-exception
-  Error of
-    [ `Empty
-    | `No_suitable_ctor
-    | `Hash_new_failed of string
-    | `Parameter_range
-    | `Contains_null_byte of string
-    | `Contains_newline of string
-    | `Not_fixed_width of string * int ]
+exception Error of [`Empty | `Hash_new_failed of string | `Parameter_range]
   [@@deriving sexp]
 
 module KeySet = struct
