@@ -25,7 +25,10 @@ let with_output thunk =
         let rem_len = rem_len - read_len in
         read_all ofs rem_len
     in
-    read_all 0 tot_len ; Unix.close tmp_fd ; Bytes.to_string buf
+    read_all 0 tot_len ;
+    Unix.close tmp_fd ;
+    Unix.unlink tmp_fn ;
+    Bytes.to_string buf
   in
   try
     let ret = Ok (thunk ()) in
