@@ -1,5 +1,0 @@
-OCaml wrapper for the C Minimal Perfect Hashing library
-
-ocaml-cmph is a wrapper library for the C Minimal Perfect Hashing (CMPH)
-library. CMPH contains algorithms for generating perfect hashes. ocaml-cmph
-exposes a high level interface to these hash generators.
