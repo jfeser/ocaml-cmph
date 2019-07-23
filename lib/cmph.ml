@@ -78,7 +78,7 @@ module Bindings = struct
 end
 
 exception Error of [`Empty | `Hash_new_failed of string | `Parameter_range]
-  [@@deriving sexp]
+[@@deriving sexp]
 
 module KeySet = struct
   type t =
@@ -132,7 +132,6 @@ module Config = struct
     [ `Bmz
     | `Bmz8
     | `Chm
-    | `Fch
     | `Bdz
     | `Bdz_ph
     | `Chd_ph of chd_config
@@ -145,7 +144,6 @@ module Config = struct
     | `Bmz -> 0
     | `Bmz8 -> 1
     | `Chm -> 2
-    | `Fch -> 4
     | `Bdz -> 5
     | `Bdz_ph -> 6
     | `Chd_ph _ -> 7
@@ -155,7 +153,6 @@ module Config = struct
     | `Bmz -> "Bmz"
     | `Bmz8 -> "Bmz8"
     | `Chm -> "Chm"
-    | `Fch -> "Fch"
     | `Bdz -> "Bdz"
     | `Bdz_ph -> "Bdz_ph"
     | `Chd_ph _ -> "Chd_ph"

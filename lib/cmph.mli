@@ -1,5 +1,5 @@
 exception Error of [`Empty | `Hash_new_failed of string | `Parameter_range]
-  [@@deriving sexp]
+[@@deriving sexp]
 
 module Util : sig
   val with_output : (unit -> 'a) -> ('a, exn) result * string
@@ -19,7 +19,6 @@ module Config : sig
     [ `Bmz
     | `Bmz8
     | `Chm
-    | `Fch
     | `Bdz
     | `Bdz_ph
     | `Chd_ph of chd_config
