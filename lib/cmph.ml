@@ -89,39 +89,44 @@ module KeySet = struct
     adapter : (Bindings.cmph_io_adapter_t, [ `Struct ]) structured ptr;
   }
 
-  let uniq keys =
-    List.sort keys ~compare:[%compare: string]
-    |> List.remove_consecutive_duplicates ~equal:[%compare.equal: string]
+  let buffer = ref (Bigstring.create 8)
 
-  let create keys =
-    let open Bigarray in
-    if List.is_empty keys then raise (Error `Empty);
-    let keys =
-      uniq keys
-      |> List.map ~f:(fun k -> Array1.of_array char C_layout (String.to_array k))
-    in
-    let key_ptrs =
-      List.map keys ~f:(bigarray_start array1) |> CArray.of_list Ctypes.(ptr char)
-    in
-    let keys = Array.of_list keys in
-    let key_idx = ref 0 in
-    let nkeys = Unsigned.UInt32.of_int (Array.length keys) in
+  let all_keys = ref []
+
+  let read, dispose, rewind, adapter =
+    let keys = ref !all_keys in
+    let nkeys = Unsigned.UInt32.of_int 0 in
     let read _ key_ptr key_len =
-      (let module Array = CArray in
-      key_ptr <-@ key_ptrs.(!key_idx));
-      let len = Array1.dim keys.(!key_idx) in
-      key_len <-@ Unsigned.UInt32.of_int len;
-      incr key_idx;
-      len
+      match !keys with
+      | [] -> failwith "Out of keys."
+      | x :: xs ->
+          let len = String.length x in
+          (* Ensure that the buffer is large enough to hold the key. *)
+          if len > Bigstring.length !buffer then
+            buffer := Bigstring.create @@ Int.ceil_pow2 len;
+          (* Copy the key into the buffer. *)
+          Bigstring.From_string.blit ~src:x ~src_pos:0 ~dst:!buffer ~dst_pos:0 ~len;
+
+          key_ptr <-@ bigarray_start array1 !buffer;
+          key_len <-@ Unsigned.UInt32.of_int len;
+          keys := xs;
+          len
     in
     let dispose _ _ _ = () in
-    let rewind _ = key_idx := 0 in
+    let rewind _ = keys := !all_keys in
     let adapter = make Bindings.cmph_io_adapter_t in
     setf adapter Bindings.nkeys nkeys;
     setf adapter Bindings.read read;
     setf adapter Bindings.dispose dispose;
     setf adapter Bindings.rewind rewind;
-    { length = Array.length keys; read; dispose; rewind; adapter = addr adapter }
+    (read, dispose, rewind, adapter)
+
+  let uniq keys = List.dedup_and_sort ~compare:[%compare: string] keys
+
+  let create keys =
+    if List.is_empty keys then raise (Error `Empty);
+    all_keys := uniq keys;
+    { length = List.length keys; read; dispose; rewind; adapter = addr adapter }
 end
 
 module Config = struct
