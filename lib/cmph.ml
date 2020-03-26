@@ -93,11 +93,11 @@ module KeySet = struct
 
   let all_keys = ref []
 
+  let keys_ptr = ref []
+
   let read, dispose, rewind, adapter =
-    let keys = ref !all_keys in
-    let nkeys = Unsigned.UInt32.of_int 0 in
     let read _ key_ptr key_len =
-      match !keys with
+      match !keys_ptr with
       | [] -> failwith "Out of keys."
       | x :: xs ->
           let len = String.length x in
@@ -109,13 +109,12 @@ module KeySet = struct
 
           key_ptr <-@ bigarray_start array1 !buffer;
           key_len <-@ Unsigned.UInt32.of_int len;
-          keys := xs;
+          keys_ptr := xs;
           len
     in
     let dispose _ _ _ = () in
-    let rewind _ = keys := !all_keys in
+    let rewind _ = keys_ptr := !all_keys in
     let adapter = make Bindings.cmph_io_adapter_t in
-    setf adapter Bindings.nkeys nkeys;
     setf adapter Bindings.read read;
     setf adapter Bindings.dispose dispose;
     setf adapter Bindings.rewind rewind;
@@ -126,6 +125,8 @@ module KeySet = struct
   let create keys =
     if List.is_empty keys then raise (Error `Empty);
     all_keys := uniq keys;
+    keys_ptr := !all_keys;
+    setf adapter Bindings.nkeys @@ Unsigned.UInt32.of_int @@ List.length keys;
     { length = List.length keys; read; dispose; rewind; adapter = addr adapter }
 end
 
