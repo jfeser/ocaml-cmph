@@ -1,4 +1,4 @@
-exception Error of [`Empty | `Hash_new_failed of string | `Parameter_range]
+exception Error of [ `Empty | `Hash_new_failed of string | `Parameter_range | `Freed ]
 [@@deriving sexp]
 
 module Util : sig
@@ -9,11 +9,11 @@ module KeySet : sig
   type t
 
   val create : string list -> t
-  (** Create a key set. *)
+  (** Create a KeySet.t from a list of string keys *)
 end
 
 module Config : sig
-  type chd_config = {keys_per_bucket: int; keys_per_bin: int}
+  type chd_config = { keys_per_bucket : int; keys_per_bin : int }
 
   type algo =
     [ `Bmz
@@ -24,6 +24,8 @@ module Config : sig
     | `Chd_ph of chd_config
     | `Chd of chd_config ]
 
+  type 'a args = ?verbose:bool -> ?algo:algo -> ?seed:int -> KeySet.t -> 'a
+
   type t
 
   val default_chd : algo
@@ -32,7 +34,17 @@ module Config : sig
 
   val string_of_algo : algo -> string
 
-  val create : ?verbose:bool -> ?algo:algo -> ?seed:int -> KeySet.t -> t
+  val create : t args
+  (** Create a hash configuration from a KeySet.t *)
+
+  val with_config : ((t -> 'a) -> 'a) args
+  (** Create a hash configuration from a KeySet.t, destroying it after use *)
+
+  val destroy : t -> unit
+  (** Destroy a Config.t
+
+      This function is idempotent.
+  *)
 end
 
 module Hash : sig
@@ -42,7 +54,15 @@ module Hash : sig
 
   val of_packed : string -> t
 
+  val with_hash : Config.t -> (t -> 'a) -> 'a
+
   val to_packed : t -> string
 
   val hash : t -> string -> int
+
+  val destroy : t -> unit
+  (** Destroy a Hash.t
+
+      This function is idempotent.
+  *)
 end

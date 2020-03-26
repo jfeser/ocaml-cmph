@@ -77,16 +77,17 @@ module Bindings = struct
     foreign "cmph_search_packed" (ocaml_string @-> string @-> int @-> returning int)
 end
 
-exception Error of [`Empty | `Hash_new_failed of string | `Parameter_range]
+exception Error of [ `Empty | `Hash_new_failed of string | `Parameter_range | `Freed ]
 [@@deriving sexp]
 
 module KeySet = struct
-  type t =
-    { length: int
-    ; read: unit ptr -> char ptr ptr -> Unsigned.uint32 ptr -> int
-    ; dispose: unit ptr -> char ptr -> Unsigned.uint32 -> unit
-    ; rewind: unit ptr -> unit
-    ; adapter: (Bindings.cmph_io_adapter_t, [`Struct]) structured ptr }
+  type t = {
+    length : int;
+    read : unit ptr -> char ptr ptr -> Unsigned.uint32 ptr -> int;
+    dispose : unit ptr -> char ptr -> Unsigned.uint32 -> unit;
+    rewind : unit ptr -> unit;
+    adapter : (Bindings.cmph_io_adapter_t, [ `Struct ]) structured ptr;
+  }
 
   let uniq keys =
     List.sort keys ~compare:[%compare: string]
@@ -94,7 +95,7 @@ module KeySet = struct
 
   let create keys =
     let open Bigarray in
-    if List.is_empty keys then raise (Error `Empty) ;
+    if List.is_empty keys then raise (Error `Empty);
     let keys =
       uniq keys
       |> List.map ~f:(fun k -> Array1.of_array char C_layout (String.to_array k))
@@ -107,26 +108,26 @@ module KeySet = struct
     let nkeys = Unsigned.UInt32.of_int (Array.length keys) in
     let read _ key_ptr key_len =
       (let module Array = CArray in
-      key_ptr <-@ key_ptrs.(!key_idx)) ;
+      key_ptr <-@ key_ptrs.(!key_idx));
       let len = Array1.dim keys.(!key_idx) in
-      key_len <-@ Unsigned.UInt32.of_int len ;
-      incr key_idx ;
+      key_len <-@ Unsigned.UInt32.of_int len;
+      incr key_idx;
       len
     in
     let dispose _ _ _ = () in
     let rewind _ = key_idx := 0 in
     let adapter = make Bindings.cmph_io_adapter_t in
-    setf adapter Bindings.nkeys nkeys ;
-    setf adapter Bindings.read read ;
-    setf adapter Bindings.dispose dispose ;
-    setf adapter Bindings.rewind rewind ;
-    {length= Array.length keys; read; dispose; rewind; adapter= addr adapter}
+    setf adapter Bindings.nkeys nkeys;
+    setf adapter Bindings.read read;
+    setf adapter Bindings.dispose dispose;
+    setf adapter Bindings.rewind rewind;
+    { length = Array.length keys; read; dispose; rewind; adapter = addr adapter }
 end
 
 module Config = struct
-  type hash = [`Jenkins | `Count] [@@deriving sexp]
+  type hash = [ `Jenkins | `Count ] [@@deriving sexp]
 
-  type chd_config = {keys_per_bucket: int; keys_per_bin: int} [@@deriving sexp]
+  type chd_config = { keys_per_bucket : int; keys_per_bin : int } [@@deriving sexp]
 
   type algo =
     [ `Bmz
@@ -138,7 +139,13 @@ module Config = struct
     | `Chd of chd_config ]
   [@@deriving sexp]
 
-  type t = {config: Bindings.cmph_config_t; keyset: KeySet.t}
+  type 'a args = ?verbose:bool -> ?algo:algo -> ?seed:int -> KeySet.t -> 'a
+
+  type t = {
+    config : Bindings.cmph_config_t;
+    keyset : KeySet.t;
+    mutable freed : bool;
+  }
 
   let algo_value = function
     | `Bmz -> 0
@@ -158,9 +165,9 @@ module Config = struct
     | `Chd_ph _ -> "Chd_ph"
     | `Chd _ -> "Chd"
 
-  let default_chd = `Chd {keys_per_bucket= 4; keys_per_bin= 1}
+  let default_chd = `Chd { keys_per_bucket = 4; keys_per_bin = 1 }
 
-  let default_chd_ph = `Chd_ph {keys_per_bucket= 4; keys_per_bin= 1}
+  let default_chd_ph = `Chd_ph { keys_per_bucket = 4; keys_per_bin = 1 }
 
   let valid_algo algo keyset =
     match algo with
@@ -174,60 +181,85 @@ module Config = struct
         if keyset.KeySet.length > 256 then raise (Error `Parameter_range) else ()
     | _ -> ()
 
-  let create : ?verbose:bool -> ?algo:algo -> ?seed:int -> KeySet.t -> t =
-   fun ?(verbose = false) ?(algo = default_chd) ?seed keyset ->
-    valid_algo algo keyset ;
+  let create ?(verbose = false) ?(algo = default_chd) ?seed keyset =
+    valid_algo algo keyset;
     let seed =
       match seed with
       | Some x -> x
       | None -> Random.State.make_self_init () |> Random.State.bits
     in
-    Bindings.srand seed ;
+    Bindings.srand seed;
     let config = Bindings.cmph_config_new keyset.adapter in
-    Bindings.cmph_config_set_graphsize config 0.90 ;
-    Bindings.cmph_config_set_algo config (algo_value algo) ;
-    Bindings.cmph_config_set_verbosity config (if verbose then 1 else 0) ;
+    Bindings.cmph_config_set_graphsize config 0.90;
+    Bindings.cmph_config_set_algo config (algo_value algo);
+    Bindings.cmph_config_set_verbosity config (if verbose then 1 else 0);
     ( match algo with
     | `Chd c | `Chd_ph c ->
-        Bindings.cmph_config_set_b config c.keys_per_bucket ;
+        Bindings.cmph_config_set_b config c.keys_per_bucket;
         Bindings.cmph_config_set_keys_per_bin config c.keys_per_bin
-    | _ -> () ) ;
-    let ret = {config; keyset} in
-    Caml.Gc.finalise (fun {config; _} -> Bindings.cmph_config_destroy config) ret ;
-    ret
+    | _ -> () );
+    { config; keyset; freed = false }
+
+  let assert_valid { freed; _ } = if freed then raise @@ Error `Freed
+
+  let destroy c =
+    if not c.freed then (
+      Bindings.cmph_config_destroy c.config;
+      c.freed <- true )
+
+  let with_config ?verbose ?algo ?seed keyset f =
+    let c = create ?verbose ?algo ?seed keyset in
+    Exn.protectx ~f c ~finally:destroy
 end
 
 module Hash = struct
-  type t = Config of {hash: Bindings.cmph_t; config: Config.t} | Packed of string
+  type t =
+    | Config of { hash : Bindings.cmph_t; mutable freed : bool; config : Config.t }
+    | Packed of string
 
-  let of_config : Config.t -> t =
-   fun ({config= cconfig; _} as config) ->
-    let hash, output = Util.with_output (fun () -> Bindings.cmph_new cconfig) in
+  let assert_valid = function
+    | Config { freed = true; _ } -> raise @@ Error `Freed
+    | _ -> ()
+
+  let of_config c =
+    Config.assert_valid c;
+    let hash, output =
+      Util.with_output (fun () -> Bindings.cmph_new c.Config.config)
+    in
     match hash with
     | Ok hash ->
-        if Ctypes.is_null hash then raise (Error (`Hash_new_failed output)) ;
-        let ret = Config {hash; config} in
-        Caml.Gc.finalise
-          (function Config {hash; _} -> Bindings.cmph_destroy hash | _ -> ())
-          ret ;
-        ret
+        if Ctypes.is_null hash then raise (Error (`Hash_new_failed output));
+        Config { hash; freed = false; config = c }
     | Error _ -> raise (Error (`Hash_new_failed output))
 
-  let of_packed : string -> t = fun pack -> Packed pack
+  let of_packed pack = Packed pack
 
-  let to_packed : t -> string = function
-    | Config {hash; _} ->
+  let to_packed h =
+    assert_valid h;
+    match h with
+    | Config { hash; _ } ->
         let size = Bindings.cmph_packed_size hash in
         let buf = Bytes.create size in
-        Bindings.cmph_pack hash (ocaml_bytes_start buf) ;
+        Bindings.cmph_pack hash (ocaml_bytes_start buf);
         Bytes.to_string buf
     | Packed p -> p
 
-  let hash : t -> string -> int =
-   fun t key ->
+  let hash t key =
+    assert_valid t;
     match t with
-    | Config {hash; _} -> Bindings.cmph_search hash key (String.length key)
+    | Config { hash; _ } -> Bindings.cmph_search hash key (String.length key)
     | Packed pack ->
-        Bindings.cmph_search_packed (ocaml_string_start pack) key
-          (String.length key)
+        Bindings.cmph_search_packed (ocaml_string_start pack) key (String.length key)
+
+  let destroy = function
+    | Packed _ -> ()
+    | Config c ->
+        Config.destroy c.config;
+        if not c.freed then (
+          Bindings.cmph_destroy c.hash;
+          c.freed <- true )
+
+  let with_hash c f =
+    let h = of_config c in
+    Exn.protectx ~f h ~finally:destroy
 end
