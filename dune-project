@@ -19,8 +19,8 @@ exposes a high level interface to these hash generators.
   (ounit (and :with_test (>= 2.0)))
   (ctypes (>= 0.14))
   (ctypes-foreign (>= 0.4))
-  (core (>= v0.12))
-  (ppx_sexp_conv (>= v0.12))))
+  (core (>= v0.14))
+  (ppx_sexp_conv (>= v0.14))))
 
 (using fmt 1.1)
 (generate_opam_files true)

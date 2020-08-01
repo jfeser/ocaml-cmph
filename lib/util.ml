@@ -7,11 +7,11 @@ let with_output thunk =
   let tmp_fd =
     Unix.(openfile tmp_fn ~mode:[ O_RDWR; O_CREAT; O_KEEPEXEC ] ~perm:0o600)
   in
-  Unix.(dup2 ~src:tmp_fd ~dst:stdout);
-  Unix.(dup2 ~src:tmp_fd ~dst:stderr);
+  Unix.(dup2 ~src:tmp_fd ~dst:stdout ());
+  Unix.(dup2 ~src:tmp_fd ~dst:stderr ());
   let cleanup () =
-    Unix.(dup2 ~src:old_stdout ~dst:stdout);
-    Unix.(dup2 ~src:old_stderr ~dst:stderr);
+    Unix.(dup2 ~src:old_stdout ~dst:stdout ());
+    Unix.(dup2 ~src:old_stderr ~dst:stderr ());
     Unix.close old_stdout;
     Unix.close old_stderr;
     assert (Int64.(Unix.(lseek tmp_fd 0L ~mode:SEEK_SET) = 0L));
