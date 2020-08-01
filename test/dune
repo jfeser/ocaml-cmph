@@ -4,6 +4,7 @@
  (libraries oUnit cmph)
  (deps
   (file keys-long.txt)
+  (file keys-short.txt)
   (file keys-fw-1.buf)
   (file keys-fw.buf)))
 

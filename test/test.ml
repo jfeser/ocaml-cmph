@@ -3,15 +3,15 @@ open OUnit2
 open Cmph
 open Util
 
-let seeds = [0; 1; 2; 3; 4; 5]
+let seeds = [ 0; 1; 2; 3; 4; 5 ]
 
 let of_int ~byte_width x =
   if byte_width > 0 && Float.(of_int x >= 2.0 ** (of_int byte_width * 8.0)) then
-    failwith "Integer too large." ;
+    failwith "Integer too large.";
   let buf = Bytes.make byte_width '\x00' in
   for i = 0 to byte_width - 1 do
     Bytes.set buf i ((x lsr (i * 8)) land 0xFF |> Caml.char_of_int)
-  done ;
+  done;
   Bytes.to_string buf
 
 let check_result ctxt out =
@@ -25,31 +25,28 @@ let check_result ctxt out =
       assert_failure msg
 
 let gc_test_1 =
-  "gc-fixed"
-  >:: fun _ ->
-  let keys = List.map [0; 1; 2; 3] ~f:(of_int ~byte_width:4) in
+  "gc-fixed" >:: fun _ ->
+  let keys = List.map [ 0; 1; 2; 3 ] ~f:(of_int ~byte_width:4) in
   let keyset = KeySet.create keys in
-  Caml.Gc.compact () ;
+  Caml.Gc.compact ();
   let config = Config.create keyset in
-  Caml.Gc.compact () ;
-  Hash.of_config config |> ignore ;
+  Caml.Gc.compact ();
+  Hash.of_config config |> ignore;
   assert_bool "" true
 
 let gc_test_2 =
-  "gc-cstring"
-  >:: fun _ ->
-  let keys = ["0"; "1"; "2"; "3"; "4"; "5"; "6"] in
+  "gc-cstring" >:: fun _ ->
+  let keys = [ "0"; "1"; "2"; "3"; "4"; "5"; "6" ] in
   let keyset = KeySet.create keys in
-  Caml.Gc.compact () ;
+  Caml.Gc.compact ();
   let config = Config.create keyset in
-  Caml.Gc.compact () ;
-  Hash.of_config config |> ignore ;
+  Caml.Gc.compact ();
+  Hash.of_config config |> ignore;
   assert_bool "" true
 
 let packed_strings_test algo seed fn =
   let name = Printf.sprintf "%s:%d:%s" (Config.string_of_algo algo) seed fn in
-  name
-  >:: fun ctxt ->
+  name >:: fun ctxt ->
   let ch = In_channel.create fn in
   let rec read lines =
     try
@@ -70,8 +67,7 @@ let packed_strings_test algo seed fn =
 
 let packed_fw_test algo seed fn =
   let name = Printf.sprintf "%s:%d:%s" (Config.string_of_algo algo) seed fn in
-  name
-  >:: fun ctxt ->
+  name >:: fun ctxt ->
   let ch = In_channel.create fn in
   let rec read keys =
     try
@@ -100,22 +96,23 @@ let product_3 l1 l2 l3 =
 
 let suite =
   "tests"
-  >::: [ gc_test_1
-       ; gc_test_2
-       ; ( "packed-strings"
+  >::: [
+         gc_test_1;
+         gc_test_2;
+         ( "packed-strings"
          >:::
          (* Disable Bmz8 algorithm because it only works for key sets with < 256
             keys. *)
-         let algos = Config.[`Bmz; default_chd; default_chd_ph; `Bdz; `Bdz_ph] in
-         product_3 algos seeds ["keys-long.txt"]
-         |> List.map ~f:(fun (algo, seed, fn) -> packed_strings_test algo seed fn)
-         )
-       ; ( "packed-fixedwidth"
+         let algos = Config.[ `Bmz; default_chd; default_chd_ph; `Bdz; `Bdz_ph ] in
+         product_3 algos seeds [ "keys-long.txt"; "keys-short.txt" ]
+         |> List.map ~f:(fun (algo, seed, fn) -> packed_strings_test algo seed fn) );
+         ( "packed-fixedwidth"
          >:::
          let algos =
-           Config.[`Bmz; `Bmz8; default_chd; default_chd_ph; `Bdz; `Bdz_ph]
+           Config.[ `Bmz; `Bmz8; default_chd; default_chd_ph; `Bdz; `Bdz_ph ]
          in
-         product_3 algos seeds ["keys-fw.buf"; "keys-fw-1.buf"]
-         |> List.map ~f:(fun (algo, seed, fn) -> packed_fw_test algo seed fn) ) ]
+         product_3 algos seeds [ "keys-fw.buf"; "keys-fw-1.buf" ]
+         |> List.map ~f:(fun (algo, seed, fn) -> packed_fw_test algo seed fn) );
+       ]
 
 let () = run_test_tt_main suite
