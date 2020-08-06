@@ -8,11 +8,6 @@
   (file keys-fw-1.buf)
   (file keys-fw.buf)))
 
-(test
- (name example)
- (modules example)
- (libraries cmph))
-
 ; Local Variables:
 ; mode: tuareg-dune
 ; End:
